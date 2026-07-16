@@ -210,6 +210,27 @@ export const getDailyClose = async (req, res, next) => {
   }
 };
 
+export const getDailyCloses = async (req, res, next) => {
+  try {
+    const { desde, hasta } = req.query;
+    const filter = {};
+
+    if (desde || hasta) {
+      const start = parseDate(desde) || new Date(0);
+      const end = parseDate(hasta);
+      filter.fecha = {
+        $gte: start,
+        $lt: end ? new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1) : new Date(8640000000000000),
+      };
+    }
+
+    const closes = await DailyClose.find(filter).sort({ fecha: -1 });
+    res.json(closes);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getSalesStats = async (req, res, next) => {
   try {
     const { desde, hasta } = req.query;

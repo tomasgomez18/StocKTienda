@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
-import { getSales, getSalesStats, getMostSold, salesLogin, deleteSale, getDailyClose } from '../../api/sales';
+import { getSales, getSalesStats, getMostSold, salesLogin, deleteSale, getDailyClose, getDailyCloses } from '../../api/sales';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const today = () => {
@@ -61,6 +61,14 @@ const Sales = () => {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
 
+  const [activeTab, setActiveTab] = useState('ventas');
+
+  const [cDesde, setCDesde] = useState(today);
+  const [cHasta, setCHasta] = useState(today);
+  const [cActivePeriodo, setCActivePeriodo] = useState('dia');
+  const [closes, setCloses] = useState([]);
+  const [closesLoading, setClosesLoading] = useState(false);
+
   const handleSalesLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -108,6 +116,64 @@ const Sales = () => {
       .finally(() => setLoading(false));
   };
 
+  const fetchCloses = () => {
+    if (!localStorage.getItem('salesToken')) {
+      setAuthed(false);
+      return;
+    }
+    setClosesLoading(true);
+    getDailyCloses({ desde: cDesde, hasta: cHasta })
+      .then((res) => setCloses(res.data))
+      .catch((err) => {
+        if (!localStorage.getItem('salesToken')) setAuthed(false);
+      })
+      .finally(() => setClosesLoading(false));
+  };
+
+  const viewCloseDetail = (d) => {
+    const metodos = [
+      { key: 'efectivo', label: 'Efectivo', color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+      { key: 'transferencia', label: 'Transferencia', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+      { key: 'tarjeta', label: 'Tarjeta', color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
+    ];
+
+    const fechaStr = new Date(d.fecha).toLocaleDateString('es-AR');
+
+    const rowsHtml = metodos.map((m) => {
+      const info = d[m.key] || { total: 0, cantidad: 0 };
+      return `
+        <div class="flex items-center justify-between ${m.bg} ${m.border} border rounded-lg px-4 py-3">
+          <div>
+            <p class="text-sm font-medium text-white">${m.label}</p>
+            <p class="text-xs text-white/40">${info.cantidad} unidades</p>
+          </div>
+          <p class="text-lg font-bold ${m.color}">$${Number(info.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+        </div>
+      `;
+    }).join('');
+
+    Swal.fire({
+      icon: 'info',
+      title: `Cierre del ${fechaStr}`,
+      html: `
+        <div class="text-left space-y-3" style="max-width: 420px; margin: 0 auto;">
+          <div class="text-center mb-4">
+            <p class="text-3xl font-bold text-white mt-2">$${Number(d.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+            <p class="text-xs text-white/40">${d.cantidad} unidades vendidas</p>
+            <p class="text-xs text-white/20 mt-1">Cerrado: ${new Date(d.cerradoAt).toLocaleString('es-AR')}</p>
+          </div>
+          <div class="h-px bg-white/10 my-4"></div>
+          ${rowsHtml}
+        </div>
+      `,
+      confirmButtonText: 'Cerrar',
+      background: '#171717',
+      color: '#fff',
+      confirmButtonColor: '#22c55e',
+      width: 480,
+    });
+  };
+
   const handleDailyClose = async () => {
     try {
       const res = await getDailyClose();
@@ -132,7 +198,7 @@ const Sales = () => {
         `;
       }).join('');
 
-      Swal.fire({
+      await Swal.fire({
         icon: 'success',
         title: `Cierre de Caja`,
         html: `
@@ -149,12 +215,17 @@ const Sales = () => {
             </div>
           </div>
         `,
-        confirmButtonText: 'Cerrar',
+        confirmButtonText: 'Ver en historial',
         background: '#171717',
         color: '#fff',
         confirmButtonColor: '#22c55e',
         width: 480,
       });
+
+      setActiveTab('cierres');
+      setCDesde(today());
+      setCHasta(today());
+      setCActivePeriodo('dia');
     } catch (err) {
       Swal.fire({
         icon: 'error',
@@ -194,6 +265,11 @@ const Sales = () => {
     if (!authed) return;
     fetchData();
   }, [desde, hasta, authed]);
+
+  useEffect(() => {
+    if (!authed) return;
+    fetchCloses();
+  }, [cDesde, cHasta, authed]);
 
   const selectPeriodo = (p) => {
     setActivePeriodo(p.key);
@@ -255,7 +331,14 @@ const Sales = () => {
     );
   }
 
-  if (loading) return <LoadingSpinner />;
+  if (loading && activeTab === 'ventas') return <LoadingSpinner />;
+
+  const formatDateShort = (date) =>
+    new Date(date).toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
 
   return (
     <div>
@@ -266,7 +349,28 @@ const Sales = () => {
       )}
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Ventas</h1>
+        <div className="flex gap-1 bg-neutral-900/50 border border-white/5 rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab('ventas')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'ventas'
+                ? 'bg-white/10 text-white'
+                : 'text-white/40 hover:text-white/60'
+            }`}
+          >
+            Ventas
+          </button>
+          <button
+            onClick={() => setActiveTab('cierres')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'cierres'
+                ? 'bg-white/10 text-white'
+                : 'text-white/40 hover:text-white/60'
+            }`}
+          >
+            Cierres
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleDailyClose}
@@ -283,160 +387,267 @@ const Sales = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Total Vendido</p>
-          <p className="text-3xl font-bold text-green-400">
-            {formatMoney(stats?.total || 0)}
-          </p>
-          <p className="text-xs text-white/30 mt-1">{stats?.cantidad || 0} unidades</p>
-        </div>
-        <div className="bg-neutral-900/50 backdrop-blur-xl border border-green-500/20 rounded-xl p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Efectivo</p>
-          <p className="text-2xl font-bold text-white">
-            {formatMoney(stats?.efectivo?.total || 0)}
-          </p>
-          <p className="text-xs text-white/30 mt-1">{stats?.efectivo?.cantidad || 0} unidades</p>
-        </div>
-        <div className="bg-neutral-900/50 backdrop-blur-xl border border-blue-500/20 rounded-xl p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Transferencia</p>
-          <p className="text-2xl font-bold text-white">
-            {formatMoney(stats?.transferencia?.total || 0)}
-          </p>
-          <p className="text-xs text-white/30 mt-1">{stats?.transferencia?.cantidad || 0} unidades</p>
-        </div>
-        <div className="bg-neutral-900/50 backdrop-blur-xl border border-purple-500/20 rounded-xl p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Tarjeta de Credito</p>
-          <p className="text-2xl font-bold text-white">
-            {formatMoney(stats?.tarjeta?.total || 0)}
-          </p>
-          <p className="text-xs text-white/30 mt-1">{stats?.tarjeta?.cantidad || 0} unidades</p>
-        </div>
-      </div>
-
-      <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5 mb-4 flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-white/40 uppercase tracking-wider">Desde</label>
-          <input
-            type="date"
-            value={desde}
-            onChange={(e) => setDesde(e.target.value)}
-            className="px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-white/40 uppercase tracking-wider">Hasta</label>
-          <input
-            type="date"
-            value={hasta}
-            onChange={(e) => setHasta(e.target.value)}
-            className="px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
-          />
-        </div>
-        <div className="flex gap-2 ml-auto">
-          {periodos.map((p) => (
-            <button
-              key={p.key}
-              onClick={() => selectPeriodo(p)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activePeriodo === p.key
-                  ? 'bg-white/10 text-white border border-white/10'
-                  : 'text-white/40 hover:text-white/60 hover:bg-white/5'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5 mb-4 flex items-center justify-between">
-        <p className="text-white/50 text-sm">
-          {!desde && !hasta
-            ? 'Todas las ventas'
-            : `Ventas del ${desde === hasta
-              ? new Date(desde).toLocaleDateString('es-AR')
-              : `${new Date(desde).toLocaleDateString('es-AR')} al ${new Date(hasta).toLocaleDateString('es-AR')}`}
-          `}
-        </p>
-        <p className="text-2xl font-bold text-green-400">{formatMoney(data.total)}</p>
-      </div>
-
-      {mostSold.length > 0 && (
-        <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5 mb-4">
-          <h2 className="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3">Productos mas vendidos</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {mostSold.map((item) => (
-              <div key={item.productoId} className="border border-white/5 rounded-lg p-3 flex items-center justify-between bg-white/[0.02]">
-                <div>
-                  <p className="font-medium text-white text-sm">{item.nombre}</p>
-                  <p className="text-xs text-white/30">{item.categoria}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-green-400">{formatMoney(item.ingresos)}</p>
-                  <p className="text-xs text-white/30">{item.totalVendido} unid.</p>
-                </div>
-              </div>
-            ))}
+      {activeTab === 'ventas' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5">
+              <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Total Vendido</p>
+              <p className="text-3xl font-bold text-green-400">
+                {formatMoney(stats?.total || 0)}
+              </p>
+              <p className="text-xs text-white/30 mt-1">{stats?.cantidad || 0} unidades</p>
+            </div>
+            <div className="bg-neutral-900/50 backdrop-blur-xl border border-green-500/20 rounded-xl p-5">
+              <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Efectivo</p>
+              <p className="text-2xl font-bold text-white">
+                {formatMoney(stats?.efectivo?.total || 0)}
+              </p>
+              <p className="text-xs text-white/30 mt-1">{stats?.efectivo?.cantidad || 0} unidades</p>
+            </div>
+            <div className="bg-neutral-900/50 backdrop-blur-xl border border-blue-500/20 rounded-xl p-5">
+              <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Transferencia</p>
+              <p className="text-2xl font-bold text-white">
+                {formatMoney(stats?.transferencia?.total || 0)}
+              </p>
+              <p className="text-xs text-white/30 mt-1">{stats?.transferencia?.cantidad || 0} unidades</p>
+            </div>
+            <div className="bg-neutral-900/50 backdrop-blur-xl border border-purple-500/20 rounded-xl p-5">
+              <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Tarjeta de Credito</p>
+              <p className="text-2xl font-bold text-white">
+                {formatMoney(stats?.tarjeta?.total || 0)}
+              </p>
+              <p className="text-xs text-white/30 mt-1">{stats?.tarjeta?.cantidad || 0} unidades</p>
+            </div>
           </div>
-        </div>
-      )}
 
-      <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-white/5">
-            <tr>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Producto</th>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Categoria</th>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cantidad</th>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Precio Unit.</th>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Total</th>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Empleado</th>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Pago</th>
-              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Fecha</th>
-              <th className="text-right px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Accion</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.sales.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="text-center py-8 text-white/30">
-                  No hay ventas en este periodo
-                </td>
-              </tr>
-            ) : (
-              data.sales.map((s) => (
-                <tr key={s._id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-3 font-medium text-white">{s.producto?.nombre}</td>
-                  <td className="px-4 py-3 text-white/50">{s.producto?.categoria || '—'}</td>
-                  <td className="px-4 py-3 text-white">{s.cantidad}</td>
-                  <td className="px-4 py-3 text-white/50">{formatMoney(s.precio)}</td>
-                  <td className="px-4 py-3 text-white font-medium">{formatMoney(s.total)}</td>
-                  <td className="px-4 py-3 text-white/50">{s.empleado}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                      s.metodoPago === 'efectivo' ? 'bg-green-500/20 text-green-400' :
-                      s.metodoPago === 'transferencia' ? 'bg-blue-500/20 text-blue-400' :
-                      'bg-purple-500/20 text-purple-400'
-                    }`}>
-                      {s.metodoPago === 'efectivo' ? 'Efectivo' : s.metodoPago === 'transferencia' ? 'Transferencia' : 'Tarjeta'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-white/30 text-xs">{formatDate(s.createdAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleDelete(s._id)}
-                      className="text-red-400 hover:text-red-300 text-xs border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-all"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
+          <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5 mb-4 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Desde</label>
+              <input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+                className="px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Hasta</label>
+              <input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+                className="px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+              />
+            </div>
+            <div className="flex gap-2 ml-auto">
+              {periodos.map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => selectPeriodo(p)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activePeriodo === p.key
+                      ? 'bg-white/10 text-white border border-white/10'
+                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5 mb-4 flex items-center justify-between">
+            <p className="text-white/50 text-sm">
+              {!desde && !hasta
+                ? 'Todas las ventas'
+                : `Ventas del ${desde === hasta
+                  ? new Date(desde).toLocaleDateString('es-AR')
+                  : `${new Date(desde).toLocaleDateString('es-AR')} al ${new Date(hasta).toLocaleDateString('es-AR')}`}
+              `}
+            </p>
+            <p className="text-2xl font-bold text-green-400">{formatMoney(data.total)}</p>
+          </div>
+
+          {mostSold.length > 0 && (
+            <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5 mb-4">
+              <h2 className="text-xs text-white/40 font-semibold uppercase tracking-wider mb-3">Productos mas vendidos</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {mostSold.map((item) => (
+                  <div key={item.productoId} className="border border-white/5 rounded-lg p-3 flex items-center justify-between bg-white/[0.02]">
+                    <div>
+                      <p className="font-medium text-white text-sm">{item.nombre}</p>
+                      <p className="text-xs text-white/30">{item.categoria}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-green-400">{formatMoney(item.ingresos)}</p>
+                      <p className="text-xs text-white/30">{item.totalVendido} unid.</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-white/5">
+                <tr>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Producto</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Categoria</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cantidad</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Precio Unit.</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Total</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Empleado</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Pago</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Fecha</th>
+                  <th className="text-right px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Accion</th>
                 </tr>
-              ))
+              </thead>
+              <tbody>
+                {data.sales.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-8 text-white/30">
+                      No hay ventas en este periodo
+                    </td>
+                  </tr>
+                ) : (
+                  data.sales.map((s) => (
+                    <tr key={s._id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3 font-medium text-white">{s.producto?.nombre}</td>
+                      <td className="px-4 py-3 text-white/50">{s.producto?.categoria || '—'}</td>
+                      <td className="px-4 py-3 text-white">{s.cantidad}</td>
+                      <td className="px-4 py-3 text-white/50">{formatMoney(s.precio)}</td>
+                      <td className="px-4 py-3 text-white font-medium">{formatMoney(s.total)}</td>
+                      <td className="px-4 py-3 text-white/50">{s.empleado}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                          s.metodoPago === 'efectivo' ? 'bg-green-500/20 text-green-400' :
+                          s.metodoPago === 'transferencia' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-purple-500/20 text-purple-400'
+                        }`}>
+                          {s.metodoPago === 'efectivo' ? 'Efectivo' : s.metodoPago === 'transferencia' ? 'Transferencia' : 'Tarjeta'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-white/30 text-xs">{formatDate(s.createdAt)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => handleDelete(s._id)}
+                          className="text-red-400 hover:text-red-300 text-xs border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-all"
+                        >
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl p-5 mb-4 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Desde</label>
+              <input
+                type="date"
+                value={cDesde}
+                onChange={(e) => setCDesde(e.target.value)}
+                className="px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Hasta</label>
+              <input
+                type="date"
+                value={cHasta}
+                onChange={(e) => setCHasta(e.target.value)}
+                className="px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+              />
+            </div>
+            <div className="flex gap-2 ml-auto">
+              {periodos.map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => {
+                    setCActivePeriodo(p.key);
+                    setCDesde(p.desde());
+                    setCHasta(p.hasta());
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    cActivePeriodo === p.key
+                      ? 'bg-white/10 text-white border border-white/10'
+                      : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-neutral-900/50 backdrop-blur-xl border border-white/5 rounded-xl overflow-x-auto">
+            {closesLoading ? (
+              <div className="flex justify-center py-8">
+                <LoadingSpinner />
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-white/5">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Fecha</th>
+                    <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Total</th>
+                    <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cant.</th>
+                    <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Efectivo</th>
+                    <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Transferencia</th>
+                    <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Tarjeta</th>
+                    <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cerrado</th>
+                    <th className="text-right px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Accion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closes.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center py-8 text-white/30">
+                        No hay cierres en este periodo
+                      </td>
+                    </tr>
+                  ) : (
+                    closes.map((c) => (
+                      <tr key={c._id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td className="px-4 py-3 font-medium text-white">{formatDateShort(c.fecha)}</td>
+                        <td className="px-4 py-3 text-green-400 font-medium">{formatMoney(c.total)}</td>
+                        <td className="px-4 py-3 text-white">{c.cantidad}</td>
+                        <td className="px-4 py-3 text-white">
+                          <span className="text-green-400 font-medium">{formatMoney(c.efectivo?.total || 0)}</span>
+                          <span className="text-white/30 text-xs ml-1">({c.efectivo?.cantidad || 0})</span>
+                        </td>
+                        <td className="px-4 py-3 text-white">
+                          <span className="text-blue-400 font-medium">{formatMoney(c.transferencia?.total || 0)}</span>
+                          <span className="text-white/30 text-xs ml-1">({c.transferencia?.cantidad || 0})</span>
+                        </td>
+                        <td className="px-4 py-3 text-white">
+                          <span className="text-purple-400 font-medium">{formatMoney(c.tarjeta?.total || 0)}</span>
+                          <span className="text-white/30 text-xs ml-1">({c.tarjeta?.cantidad || 0})</span>
+                        </td>
+                        <td className="px-4 py-3 text-white/30 text-xs">{new Date(c.cerradoAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => viewCloseDetail(c)}
+                            className="text-blue-400 hover:text-blue-300 text-xs border border-blue-500/30 px-2 py-1 rounded-lg hover:bg-blue-500/10 transition-all"
+                          >
+                            Ver
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
