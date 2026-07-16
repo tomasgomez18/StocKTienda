@@ -19,22 +19,39 @@ const Products = () => {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [sellModal, setSellModal] = useState(null);
-  const [sellCantidad, setSellCantidad] = useState(1);
-  const [sellEmpleado, setSellEmpleado] = useState('');
   const [dropdown, setDropdown] = useState({ product: null, x: 0, y: 0 });
 
   const [error, setError] = useState('');
   const [returnModal, setReturnModal] = useState(null);
-  const [returnCantidad, setReturnCantidad] = useState(1);
+  const [returnCantidad, setReturnCantidad] = useState('1');
   const [returnTalle, setReturnTalle] = useState('');
   const [returnMotivo, setReturnMotivo] = useState('');
   const [returnOtroMotivo, setReturnOtroMotivo] = useState('');
   const [exchangeActivo, setExchangeActivo] = useState(false);
   const [exchangeSearch, setExchangeSearch] = useState('');
   const [exchangeTarget, setExchangeTarget] = useState(null);
-  const [exchangeCantidad, setExchangeCantidad] = useState(1);
+  const [exchangeCantidad, setExchangeCantidad] = useState('1');
   const [exchangeTalle, setExchangeTalle] = useState('');
+
+  const [cart, setCart] = useState([]);
+  const [showCart, setShowCart] = useState(false);
+  const [quickAdd, setQuickAdd] = useState(null);
+  const [qaCantidad, setQaCantidad] = useState('1');
+  const [qaTalle, setQaTalle] = useState('');
+  const [qaPrecio, setQaPrecio] = useState('');
+
+  const [sellEmpleado, setSellEmpleado] = useState('');
+  const [sellDescuento, setSellDescuento] = useState('');
+  const [sellMetodoPago, setSellMetodoPago] = useState('efectivo');
+  const [sellSplit, setSellSplit] = useState(false);
+  const [sellMetodo2, setSellMetodo2] = useState('transferencia');
+  const [sellMonto2, setSellMonto2] = useState('');
+
+  const cartTotal = cart.reduce((s, i) => s + i.precio * i.cantidad, 0);
+  const descuentoNum = sellDescuento === '' ? 0 : Number(sellDescuento);
+  const finalTotal = cartTotal * (1 - descuentoNum / 100);
+  const sellMonto2Num = sellMonto2 === '' ? 0 : Number(sellMonto2);
+  const sellMonto1 = sellSplit ? finalTotal - sellMonto2Num : finalTotal;
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,35 +103,82 @@ const Products = () => {
     }
   };
 
-  const [sellMetodoPago, setSellMetodoPago] = useState('efectivo');
-  const [sellTalle, setSellTalle] = useState('');
-
-  const openSell = (product) => {
-    setSellModal(product);
-    setSellCantidad(1);
-    setSellEmpleado('');
-    setSellMetodoPago('efectivo');
-    setSellTalle('');
+  const openQuickAdd = (product) => {
+    setQuickAdd(product);
+    setQaCantidad('1');
+    setQaTalle('');
+    setQaPrecio(String(product.precio));
   };
 
-  const confirmSell = async () => {
+  const confirmQuickAdd = () => {
+    const cantidad = Number(qaCantidad);
+    if (cantidad < 1) {
+      Swal.fire({ icon: 'warning', title: 'Cantidad inválida', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+      return;
+    }
+    if (quickAdd.talles?.length > 0 && !qaTalle) {
+      Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe seleccionar un talle', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+      return;
+    }
+    const precio = Number(qaPrecio);
+    if (precio < 0) {
+      Swal.fire({ icon: 'warning', title: 'Precio inválido', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+      return;
+    }
+    setCart(prev => [...prev, {
+      producto: quickAdd._id,
+      nombre: quickAdd.nombre,
+      precio,
+      cantidad,
+      talle: qaTalle,
+    }]);
+    setQuickAdd(null);
+    Swal.fire({ icon: 'success', title: 'Agregado al carrito', timer: 1000, showConfirmButton: false, background: '#171717', color: '#fff' });
+  };
+
+  const removeFromCart = (idx) => {
+    setCart(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateCartItem = (idx, field, value) => {
+    setCart(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
+
+  const openCart = () => {
+    if (cart.length === 0) {
+      Swal.fire({ icon: 'info', title: 'Carrito vacío', text: 'Agregue productos desde el menú de cada producto', background: '#171717', color: '#fff', confirmButtonColor: '#22c55e', confirmButtonText: 'OK' });
+      return;
+    }
+    setSellEmpleado('');
+    setSellDescuento('');
+    setSellMetodoPago('efectivo');
+    setSellSplit(false);
+    setSellMetodo2('transferencia');
+    setSellMonto2('');
+    setShowCart(true);
+  };
+
+  const confirmSale = async () => {
     if (!sellEmpleado.trim()) {
       Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe ingresar el nombre del empleado', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
       return;
     }
-    if (sellModal.talles?.length > 0 && !sellTalle) {
-      Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe seleccionar un talle', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+    if (sellSplit && Math.abs(sellMonto1 + sellMonto2Num - finalTotal) > 0.01) {
+      Swal.fire({ icon: 'warning', title: 'Montos incorrectos', text: 'La suma de los montos debe coincidir con el total', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
       return;
     }
     try {
+      const pagos = sellSplit
+        ? [{ metodo: sellMetodoPago, monto: Math.round(sellMonto1 * 100) / 100 }, { metodo: sellMetodo2, monto: Math.round(sellMonto2Num * 100) / 100 }]
+        : [{ metodo: sellMetodoPago, monto: Math.round(finalTotal * 100) / 100 }];
       await createSale({
-        producto: sellModal._id,
-        cantidad: sellCantidad,
+        items: cart.map(i => ({ producto: i.producto, cantidad: i.cantidad, precio: i.precio, talle: i.talle })),
         empleado: sellEmpleado.trim(),
-        metodoPago: sellMetodoPago,
-        talle: sellTalle,
+        pagos,
+        descuento: descuentoNum,
       });
-      setSellModal(null);
+      setCart([]);
+      setShowCart(false);
       fetchData();
       Swal.fire({ icon: 'success', title: 'Venta registrada', timer: 1500, showConfirmButton: false, background: '#171717', color: '#fff' });
     } catch (err) {
@@ -123,12 +187,12 @@ const Products = () => {
   };
 
   const [addStockModal, setAddStockModal] = useState(null);
-  const [addStockCantidad, setAddStockCantidad] = useState(1);
+  const [addStockCantidad, setAddStockCantidad] = useState('1');
   const [addStockTalle, setAddStockTalle] = useState('');
 
   const openAddStock = (product) => {
     setAddStockModal(product);
-    setAddStockCantidad(1);
+    setAddStockCantidad('1');
     setAddStockTalle('');
   };
 
@@ -138,7 +202,7 @@ const Products = () => {
       return;
     }
     try {
-      await addStock(addStockModal._id, { cantidad: addStockCantidad, talle: addStockTalle });
+      await addStock(addStockModal._id, { cantidad: Number(addStockCantidad), talle: addStockTalle });
       setAddStockModal(null);
       fetchData();
       Swal.fire({ icon: 'success', title: 'Stock actualizado', timer: 1500, showConfirmButton: false, background: '#171717', color: '#fff' });
@@ -149,7 +213,7 @@ const Products = () => {
 
   const openReturn = (product) => {
     setReturnModal(product);
-    setReturnCantidad(1);
+    setReturnCantidad('1');
     setReturnTalle('');
     setReturnMotivo('');
     setReturnOtroMotivo('');
@@ -180,17 +244,17 @@ const Products = () => {
       if (exchangeTarget) {
         await exchangeProduct({
           productoDevolver: returnModal._id,
-          cantidadDevolver: returnCantidad,
+          cantidadDevolver: Number(returnCantidad),
           talleDevolver: returnTalle,
           productoCargar: exchangeTarget._id,
-          cantidadCargar: exchangeCantidad,
+          cantidadCargar: Number(exchangeCantidad),
           talleCargar: exchangeTalle,
           motivo: motivoFinal,
         });
       } else {
         await createReturn({
           producto: returnModal._id,
-          cantidad: returnCantidad,
+          cantidad: Number(returnCantidad),
           talle: returnTalle,
           motivo: motivoFinal,
         });
@@ -218,12 +282,25 @@ const Products = () => {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white">Productos</h1>
-        <button
-          onClick={openCreate}
-          className="bg-white/10 hover:bg-white/20 text-white border border-white/10 px-4 py-2 rounded-lg transition-all text-sm"
-        >
-          + Nuevo Producto
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={openCart}
+            className="relative bg-amber-500/20 text-amber-400 border border-amber-500/30 px-4 py-2 rounded-lg transition-all text-sm hover:bg-amber-500/30"
+          >
+            Carrito
+            {cart.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-amber-500 text-black text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                {cart.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={openCreate}
+            className="bg-white/10 hover:bg-white/20 text-white border border-white/10 px-4 py-2 rounded-lg transition-all text-sm"
+          >
+            + Nuevo Producto
+          </button>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -254,63 +331,149 @@ const Products = () => {
         </div>
       )}
 
-      {sellModal && (
+      {quickAdd && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-neutral-900 border border-white/10 rounded-xl shadow-2xl shadow-black/40 p-6 w-full max-w-sm mx-4">
-            <h2 className="text-xl font-bold text-white mb-2">Vender Producto</h2>
-            <p className="text-white/50 text-sm mb-4">
-              {sellModal.nombre} — Stock actual: <span className="text-white font-semibold">{sellModal.cantidad}</span>
-            </p>
-            <div className="space-y-4 mb-6">
+            <h2 className="text-lg font-bold text-white mb-1">Agregar al Carrito</h2>
+            <p className="text-white/50 text-sm mb-4">{quickAdd.nombre}</p>
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">
-                  Empleado
-                </label>
+                <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Cantidad</label>
                 <input
-                  type="text"
-                  required
-                  value={sellEmpleado}
-                  onChange={(e) => setSellEmpleado(e.target.value)}
-                  placeholder="Nombre del empleado"
-                  className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm"
+                  type="text" inputMode="numeric"
+                  value={qaCantidad}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || /^\d+$/.test(v)) setQaCantidad(v);
+                  }}
+                  className="w-full px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
               <div>
-                <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">
-                  Cantidad
-                </label>
+                <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Precio unitario</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={sellModal.cantidad}
-                  value={sellCantidad}
-                  onChange={(e) => setSellCantidad(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm"
+                  type="text" inputMode="decimal"
+                  value={qaPrecio}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) setQaPrecio(v);
+                  }}
+                  className="w-full px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
-              {sellModal.talles?.length > 0 && (
+              {quickAdd.talles?.length > 0 && (
                 <div>
                   <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Talle <span className="text-red-400">*</span></label>
                   <select
-                    value={sellTalle}
-                    onChange={(e) => setSellTalle(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+                    value={qaTalle}
+                    onChange={(e) => setQaTalle(e.target.value)}
+                    className="w-full px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
                   >
-                    {sellModal.talles.map((t) => (
-                      <option key={t.talle} value={t.talle} className="bg-neutral-900">
-                        {t.talle} ({t.cantidad} disp.)
-                      </option>
+                    <option value="" className="bg-neutral-900">Seleccionar...</option>
+                    {quickAdd.talles.map((t) => (
+                      <option key={t.talle} value={t.talle} className="bg-neutral-900">{t.talle} ({t.cantidad})</option>
                     ))}
                   </select>
                 </div>
               )}
-              <div>
-                <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Metodo de pago</label>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setQuickAdd(null)}
+                className="px-4 py-2 text-white/50 border border-white/10 rounded-lg text-sm hover:bg-white/5 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmQuickAdd}
+                className="px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-sm hover:bg-amber-500/30 transition-all"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCart && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-neutral-900 border border-white/10 rounded-xl shadow-2xl shadow-black/40 p-6 w-full max-w-2xl mx-4 max-h-[95vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-white mb-4">Carrito ({cart.length} productos)</h2>
+
+            <div className="space-y-2 mb-4">
+              {cart.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{item.nombre}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="text" inputMode="numeric"
+                      value={item.cantidad}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || /^\d+$/.test(v)) updateCartItem(idx, 'cantidad', v === '' ? 1 : Number(v));
+                      }}
+                      className="w-16 px-2 py-1.5 text-center bg-white/[0.07] border border-white/10 rounded-lg text-white text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <span className="text-white/20">×</span>
+                    <input
+                      type="text" inputMode="decimal"
+                      value={item.precio}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) updateCartItem(idx, 'precio', v === '' ? 0 : Number(v));
+                      }}
+                      className="w-24 px-2 py-1.5 text-right bg-white/[0.07] border border-white/10 rounded-lg text-white text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <span className="text-white/30 text-xs font-mono w-20 text-right">
+                      ${(item.precio * item.cantidad).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <button
+                      onClick={() => removeFromCart(idx)}
+                      className="text-red-400 hover:text-red-300 p-1"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-white/10 pt-4 space-y-3 mb-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Empleado</label>
+                  <input
+                    type="text" value={sellEmpleado}
+                    onChange={(e) => setSellEmpleado(e.target.value)}
+                    placeholder="Nombre"
+                    className="w-full px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Descuento</label>
+                  <input
+                    type="text" inputMode="numeric"
+                    value={sellDescuento}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d{0,3}$/.test(v)) setSellDescuento(v);
+                    }}
+                    className="w-full px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="%"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-white/[0.03] border border-white/5 rounded-lg p-4 space-y-3">
+                <label className="block text-xs text-white/40 font-medium uppercase tracking-wider">Pago</label>
                 <div className="flex gap-2">
                   {['efectivo', 'transferencia', 'tarjeta'].map((m) => (
                     <button
-                      key={m}
-                      type="button"
+                      key={m} type="button"
                       onClick={() => setSellMetodoPago(m)}
                       className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-all ${
                         sellMetodoPago === m
@@ -322,21 +485,74 @@ const Products = () => {
                     </button>
                   ))}
                 </div>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox" checked={sellSplit}
+                      onChange={(e) => { setSellSplit(e.target.checked); setSellMonto2(''); }}
+                      className="w-4 h-4 rounded bg-white/[0.07] border-white/10 text-green-400 focus:ring-green-500/30"
+                    />
+                    <span className="text-sm text-white/50">Dividir pago</span>
+                  </label>
+                  <span className="text-sm text-white/30">
+                    Monto: <span className="text-white font-mono font-medium">${sellMonto1.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                  </span>
+                </div>
+                {sellSplit && (
+                  <div className="space-y-2 pt-3 border-t border-white/5">
+                    <div className="flex items-center justify-between px-3 py-2 bg-white/[0.04] rounded-lg">
+                      <span className="text-sm font-medium text-green-400">{sellMetodoPago === 'efectivo' ? 'Efectivo' : sellMetodoPago === 'transferencia' ? 'Transferencia' : 'Tarjeta'}</span>
+                      <span className="text-sm text-white font-mono">${sellMonto1.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex gap-3 items-center">
+                      <select
+                        value={sellMetodo2}
+                        onChange={(e) => setSellMetodo2(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-white/30"
+                      >
+                        {['efectivo', 'transferencia', 'tarjeta'].filter((m) => m !== sellMetodoPago).map((m) => (
+                          <option key={m} value={m} className="bg-neutral-900">
+                            {m === 'efectivo' ? 'Efectivo' : m === 'transferencia' ? 'Transferencia' : 'Tarjeta'}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-sm text-white/30 font-mono">$</span>
+                      <input
+                        type="text" inputMode="numeric"
+                        value={sellMonto2}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '' || /^\d*\.?\d*$/.test(v)) setSellMonto2(v);
+                        }}
+                        className="w-28 px-3 py-2 bg-white/[0.07] border border-white/10 rounded-lg text-white text-sm text-right focus:outline-none focus:border-white/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setSellModal(null)}
-                className="px-4 py-2 text-white/50 border border-white/10 rounded-lg text-sm hover:bg-white/5 transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmSell}
-                className="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-sm hover:bg-green-500/30 transition-all"
-              >
-                Confirmar Venta
-              </button>
+
+            <div className="flex items-center justify-between border-t border-white/10 pt-4">
+              <div className="text-sm">
+                {descuentoNum > 0 && (
+                  <span className="text-green-400/80 mr-3">Desc. {descuentoNum}%</span>
+                )}
+                <span className="text-white/70 font-semibold">Total: <span className="text-white font-mono text-lg">${finalTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span></span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCart(false)}
+                  className="px-4 py-2 text-white/50 border border-white/10 rounded-lg text-sm hover:bg-white/5 transition-all"
+                >
+                  Seguir comprando
+                </button>
+                <button
+                  onClick={confirmSale}
+                  className="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-sm hover:bg-green-500/30 transition-all"
+                >
+                  Confirmar Venta
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -367,11 +583,13 @@ const Products = () => {
               ¿Cuántas unidades entraron?
             </label>
             <input
-              type="number"
-              min={1}
+              type="text" inputMode="numeric"
               value={addStockCantidad}
-              onChange={(e) => setAddStockCantidad(Number(e.target.value))}
-              className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm mb-6"
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d+$/.test(v)) setAddStockCantidad(v);
+              }}
+              className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm mb-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <div className="flex justify-end gap-3">
               <button
@@ -407,11 +625,13 @@ const Products = () => {
                   Cantidad a devolver
                 </label>
                 <input
-                  type="number"
-                  min={1}
+                  type="text" inputMode="numeric"
                   value={returnCantidad}
-                  onChange={(e) => setReturnCantidad(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || /^\d+$/.test(v)) setReturnCantidad(v);
+                  }}
+                  className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
 
@@ -467,7 +687,7 @@ const Products = () => {
                           onClick={() => {
                             setExchangeTarget(p);
                             setExchangeSearch('');
-                            setExchangeCantidad(1);
+                            setExchangeCantidad('1');
                           }}
                           className={`w-full text-left px-3 py-2 text-sm border-b border-white/5 last:border-0 transition-colors ${
                             exchangeTarget?._id === p._id ? 'bg-purple-500/10 text-purple-300 font-semibold' : 'text-white/60 hover:bg-white/5'
@@ -504,12 +724,13 @@ const Products = () => {
                         Cantidad a cargar
                       </label>
                       <input
-                        type="number"
-                        min={1}
-                        max={exchangeTarget.cantidad}
+                        type="text" inputMode="numeric"
                         value={exchangeCantidad}
-                        onChange={(e) => setExchangeCantidad(Number(e.target.value))}
-                        className="w-full px-3 py-2.5 bg-white/[0.07] border border-purple-500/20 rounded-lg text-white focus:outline-none focus:border-purple-500/40 transition-all text-sm"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '' || /^\d+$/.test(v)) setExchangeCantidad(v);
+                        }}
+                        className="w-full px-3 py-2.5 bg-white/[0.07] border border-purple-500/20 rounded-lg text-white focus:outline-none focus:border-purple-500/40 transition-all text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
                   )}
@@ -649,10 +870,10 @@ const Products = () => {
             style={{ left: dropdown.x, top: dropdown.y }}
           >
             <button
-              onClick={() => { openSell(dropdown.product); setDropdown({ product: null, x: 0, y: 0 }); }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-400 hover:bg-white/5 transition-colors"
+              onClick={() => { openQuickAdd(dropdown.product); setDropdown({ product: null, x: 0, y: 0 }); }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-amber-400 hover:bg-white/5 transition-colors"
             >
-              Vender
+              Agregar al carrito
             </button>
             <button
               onClick={() => { openAddStock(dropdown.product); setDropdown({ product: null, x: 0, y: 0 }); }}

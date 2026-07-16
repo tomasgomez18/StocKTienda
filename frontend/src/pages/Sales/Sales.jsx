@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import Swal from 'sweetalert2';
 import { getSales, getSalesStats, getMostSold, salesLogin, deleteSale, getDailyClose, getDailyCloses } from '../../api/sales';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -45,6 +45,23 @@ const periodos = [
   { key: 'mes', label: 'Mes', desde: firstOfMonth, hasta: today },
 ];
 
+const formatDate = (date) =>
+  new Date(date).toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const formatMoney = (n) =>
+  `$${Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+
+const getPagos = (s) =>
+  (s.pagos && s.pagos.length > 0 ? s.pagos : [{ metodo: s.metodoPago || 'efectivo', monto: s.total }]);
+
+const getItems = (s) =>
+  (s.items && s.items.length > 0 ? s.items : [{ producto: s.producto, cantidad: s.cantidad, precio: s.precio, talle: s.talle }]);
+
 const Sales = () => {
   const [authed, setAuthed] = useState(!!localStorage.getItem('salesToken'));
   const [loginEmail, setLoginEmail] = useState('');
@@ -68,6 +85,8 @@ const Sales = () => {
   const [cActivePeriodo, setCActivePeriodo] = useState('dia');
   const [closes, setCloses] = useState([]);
   const [closesLoading, setClosesLoading] = useState(false);
+
+  const [expandedId, setExpandedId] = useState(null);
 
   const handleSalesLogin = async (e) => {
     e.preventDefault();
@@ -243,7 +262,7 @@ const Sales = () => {
     const confirmed = await Swal.fire({
       icon: 'question',
       title: '¿Eliminar esta venta?',
-      text: 'El stock del producto se restaurará automáticamente',
+      text: 'El stock se restaurará automáticamente',
       showCancelButton: true,
       confirmButtonText: 'Eliminar',
       cancelButtonText: 'Cancelar',
@@ -255,6 +274,7 @@ const Sales = () => {
     try {
       await deleteSale(id);
       Swal.fire({ icon: 'success', title: 'Venta eliminada', timer: 1500, showConfirmButton: false, background: '#171717', color: '#fff' });
+      setExpandedId(null);
       fetchData();
     } catch (err) {
       Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message || 'Error al eliminar venta', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
@@ -277,16 +297,12 @@ const Sales = () => {
     setHasta(p.hasta());
   };
 
-  const formatDate = (date) =>
+  const formatDateShort = (date) =>
     new Date(date).toLocaleDateString('es-AR', {
       day: '2-digit',
       month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
+      year: 'numeric',
     });
-
-  const formatMoney = (n) =>
-    `$${Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
 
   if (!authed) {
     return (
@@ -332,13 +348,6 @@ const Sales = () => {
   }
 
   if (loading && activeTab === 'ventas') return <LoadingSpinner />;
-
-  const formatDateShort = (date) =>
-    new Date(date).toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
 
   return (
     <div>
@@ -492,11 +501,8 @@ const Sales = () => {
             <table className="w-full text-sm">
               <thead className="bg-white/5">
                 <tr>
-                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Producto</th>
-                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Categoria</th>
-                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cantidad</th>
-                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Talle</th>
-                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Precio Unit.</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Productos</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Desc.</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Total</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Empleado</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Pago</th>
@@ -507,40 +513,99 @@ const Sales = () => {
               <tbody>
                 {data.sales.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center py-8 text-white/30">
+                    <td colSpan={7} className="text-center py-8 text-white/30">
                       No hay ventas en este periodo
                     </td>
                   </tr>
                 ) : (
-                  data.sales.map((s) => (
-                    <tr key={s._id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
-                      <td className="px-4 py-3 font-medium text-white">{s.producto?.nombre}</td>
-                      <td className="px-4 py-3 text-white/50">{s.producto?.categoria || '—'}</td>
-                      <td className="px-4 py-3 text-white">{s.cantidad}</td>
-                      <td className="px-4 py-3 text-white/50">{s.talle || '—'}</td>
-                      <td className="px-4 py-3 text-white/50">{formatMoney(s.precio)}</td>
-                      <td className="px-4 py-3 text-white font-medium">{formatMoney(s.total)}</td>
-                      <td className="px-4 py-3 text-white/50">{s.empleado}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                          s.metodoPago === 'efectivo' ? 'bg-green-500/20 text-green-400' :
-                          s.metodoPago === 'transferencia' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-purple-500/20 text-purple-400'
-                        }`}>
-                          {s.metodoPago === 'efectivo' ? 'Efectivo' : s.metodoPago === 'transferencia' ? 'Transferencia' : 'Tarjeta'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-white/30 text-xs">{formatDate(s.createdAt)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => handleDelete(s._id)}
-                          className="text-red-400 hover:text-red-300 text-xs border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-all"
+                  data.sales.map((s) => {
+                    const items = getItems(s);
+                    const isExpanded = expandedId === s._id;
+                    return (
+                      <Fragment key={s._id}>
+                        <tr
+                          className="border-t border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                          onClick={() => setExpandedId(isExpanded ? null : s._id)}
                         >
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <svg
+                                className={`w-4 h-4 text-white/30 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                fill="currentColor" viewBox="0 0 20 20"
+                              >
+                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                              </svg>
+                              <span className="font-medium text-white">
+                                {items[0]?.producto?.nombre || 'Producto'}
+                                {items.length > 1 && <span className="text-white/40 font-normal"> +{items.length - 1} más</span>}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-white/50">{s.descuento ? `${s.descuento}%` : '—'}</td>
+                          <td className="px-4 py-3 text-white font-medium">{formatMoney(s.total)}</td>
+                          <td className="px-4 py-3 text-white/50">{s.empleado}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {getPagos(s).map((p, i) => (
+                                <span
+                                  key={i}
+                                  className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    p.metodo === 'efectivo' ? 'bg-green-500/20 text-green-400' :
+                                    p.metodo === 'transferencia' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-purple-500/20 text-purple-400'
+                                  }`}
+                                >
+                                  {p.metodo === 'efectivo' ? 'Efectivo' : p.metodo === 'transferencia' ? 'Transferencia' : 'Tarjeta'}
+                                  <span className="ml-1 opacity-60">${Number(p.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-white/30 text-xs">{formatDate(s.createdAt)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDelete(s._id); }}
+                              className="text-red-400 hover:text-red-300 text-xs border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-all"
+                            >
+                              Eliminar
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${s._id}-expanded`}>
+                            <td colSpan={7} className="px-0 py-0">
+                              <div className="bg-white/[0.02] border-t border-white/5">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-[11px] text-white/30 uppercase tracking-wider">
+                                      <th className="text-left px-4 py-2 pl-12 font-medium">Producto</th>
+                                      <th className="text-left px-4 py-2 font-medium">Categoria</th>
+                                      <th className="text-left px-4 py-2 font-medium">Cantidad</th>
+                                      <th className="text-left px-4 py-2 font-medium">Talle</th>
+                                      <th className="text-left px-4 py-2 font-medium">Precio Unit.</th>
+                                      <th className="text-left px-4 py-2 font-medium">Subtotal</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {items.map((item, idx) => (
+                                      <tr key={idx} className="border-t border-white/5">
+                                        <td className="px-4 py-2 pl-12 text-white font-medium">{item.producto?.nombre || 'Producto'}</td>
+                                        <td className="px-4 py-2 text-white/50">{item.producto?.categoria || '—'}</td>
+                                        <td className="px-4 py-2 text-white">{item.cantidad}</td>
+                                        <td className="px-4 py-2 text-white/50">{item.talle || '—'}</td>
+                                        <td className="px-4 py-2 text-white/50">{formatMoney(item.precio)}</td>
+                                        <td className="px-4 py-2 text-white font-medium">{formatMoney(item.subtotal || item.precio * item.cantidad)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
