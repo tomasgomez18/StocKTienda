@@ -233,7 +233,7 @@ const Sales = () => {
         text: err.response?.data?.message || 'Error al obtener cierre de caja',
         background: '#171717',
         color: '#fff',
-        confirmButtonColor: '#fff',
+        confirmButtonColor: '#22c55e',
         confirmButtonText: 'OK',
       });
     }
