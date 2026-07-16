@@ -48,15 +48,15 @@ export const getMe = async (req, res, next) => {
 
 export const seed = async (req, res, next) => {
   try {
-    const existing = await User.findOne({ email: 'maurocrr07@gmail.com' });
+    const existing = await User.findOne({ email: process.env.ADMIN_EMAIL });
     if (existing) {
       return res.json({ message: 'El usuario admin ya existe' });
     }
 
     await User.create({
       nombre: 'Admin',
-      email: 'maurocrr07@gmail.com',
-      password: 'Maison2026',
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
       rol: 'admin',
     });
 

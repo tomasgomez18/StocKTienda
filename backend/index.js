@@ -7,7 +7,7 @@ import { connectDB } from './config/db.js';
 import { errorHandler } from './middlewares/ErrorMiddleware.js';
 import AuthRoutes from './modules/Auth/AuthRoutes.js';
 
-const requiredEnv = ['MONGO_URI', 'JWT_SECRET', 'ALLOWED_ORIGINS'];
+const requiredEnv = ['MONGO_URI', 'JWT_SECRET', 'ALLOWED_ORIGINS', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
 for (const env of requiredEnv) {
   if (!process.env[env]) {
     console.error(`FATAL: Missing required environment variable ${env}`);
@@ -19,6 +19,7 @@ import ProductRoutes from './modules/Product/ProductRoutes.js';
 import ReturnRoutes from './modules/Return/ReturnRoutes.js';
 import SaleRoutes from './modules/Sale/SaleRoutes.js';
 import SalesAuthRoutes from './modules/SalesAuth/SalesAuthRoutes.js';
+import User from './modules/Auth/AuthModel.js';
 
 const app = express();
 app.set('env', process.env.NODE_ENV || 'development');
@@ -57,7 +58,27 @@ app.use('/api/*', (req, res) => {
 
 app.use(errorHandler);
 
-connectDB().then(() => {
+const seedAdmin = async () => {
+  try {
+    const existing = await User.findOne({ email: process.env.ADMIN_EMAIL });
+    if (!existing) {
+      await User.create({
+        nombre: 'Admin',
+        email: process.env.ADMIN_EMAIL,
+        password: process.env.ADMIN_PASSWORD,
+        rol: 'admin',
+      });
+      console.log('Usuario admin creado automáticamente');
+    } else {
+      console.log('El usuario admin ya existe');
+    }
+  } catch (error) {
+    console.error('Error al crear usuario admin:', error.message);
+  }
+};
+
+connectDB().then(async () => {
+  await seedAdmin();
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
   });

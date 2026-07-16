@@ -1,17 +1,16 @@
+import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 
-const email = 'maurocrr07@gmail.com';
-const plainPassword = 'Maison2026';
+const email = process.env.ADMIN_EMAIL || 'admin@ejemplo.com';
+const plainPassword = process.env.ADMIN_PASSWORD || 'password';
 
 const hash = bcrypt.hashSync(plainPassword, 10);
 
-console.log('=== CREDENCIALES ===');
+console.log('=== CREDENCIALES (desde .env) ===');
 console.log(`Email:    ${email}`);
 console.log(`Password: ${plainPassword}`);
 console.log();
-console.log('Para crear este usuario en la DB:');
-console.log('  Hace un POST a /api/auth/seed con un token valido');
-console.log('  O ejecuta: node seed.js (solo imprime el hash)');
+console.log('El usuario admin se crea automáticamente al iniciar el servidor.');
 console.log();
 console.log('Hash generado:');
 console.log(hash);
