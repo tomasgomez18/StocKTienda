@@ -1,7 +1,9 @@
 import { ZodError } from 'zod';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 export const errorHandler = (err, req, res, next) => {
-  if (process.env.NODE_ENV !== 'production') {
+  if (isDev) {
     console.error(err.stack);
   }
 
@@ -16,7 +18,7 @@ export const errorHandler = (err, req, res, next) => {
   }
 
   if (err.name === 'ValidationError') {
-    return res.status(400).json({ message: err.message });
+    return res.status(400).json({ message: isDev ? err.message : 'Datos inválidos' });
   }
 
   if (err.code === 11000) {
@@ -25,6 +27,6 @@ export const errorHandler = (err, req, res, next) => {
 
   const status = err.statusCode || 500;
   res.status(status).json({
-    message: err.message || 'Error interno del servidor',
+    message: isDev ? err.message : 'Error interno del servidor',
   });
 };

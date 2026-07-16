@@ -22,6 +22,7 @@ import SalesAuthRoutes from './modules/SalesAuth/SalesAuthRoutes.js';
 import User from './modules/Auth/AuthModel.js';
 
 const app = express();
+const isDev = process.env.NODE_ENV !== 'production';
 app.set('env', process.env.NODE_ENV || 'development');
 const PORT = process.env.PORT || 5000;
 
@@ -61,17 +62,17 @@ app.use(errorHandler);
 const seedAdmin = async () => {
   try {
     const existing = await User.findOne({ email: process.env.ADMIN_EMAIL });
-    if (!existing) {
-      await User.create({
-        nombre: 'Admin',
-        email: process.env.ADMIN_EMAIL,
-        password: process.env.ADMIN_PASSWORD,
-        rol: 'admin',
-      });
-      console.log('Usuario admin creado automáticamente');
-    } else {
-      console.log('El usuario admin ya existe');
-    }
+      if (!existing) {
+        await User.create({
+          nombre: 'Admin',
+          email: process.env.ADMIN_EMAIL,
+          password: process.env.ADMIN_PASSWORD,
+          rol: 'admin',
+        });
+        if (isDev) console.log('Usuario admin creado automáticamente');
+      } else {
+        if (isDev) console.log('El usuario admin ya existe');
+      }
   } catch (error) {
     console.error('Error al crear usuario admin:', error.message);
   }
@@ -80,6 +81,6 @@ const seedAdmin = async () => {
 connectDB().then(async () => {
   await seedAdmin();
   app.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
+    if (isDev) console.log(`Servidor corriendo en puerto ${PORT}`);
   });
 });
