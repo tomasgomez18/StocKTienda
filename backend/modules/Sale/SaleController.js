@@ -24,16 +24,35 @@ export const createSale = async (req, res, next) => {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    if (product.cantidad < data.cantidad) {
+    if (product.talles?.length > 0 && !data.talle) {
       await session.abortTransaction();
-      return res.status(400).json({
-        message: `Stock insuficiente. Solo hay ${product.cantidad} unidad(es).`,
-      });
+      return res.status(400).json({ message: 'Debe seleccionar un talle' });
+    }
+
+    if (data.talle) {
+      const idx = product.talles.findIndex((t) => t.talle === data.talle);
+      if (idx === -1) {
+        await session.abortTransaction();
+        return res.status(400).json({ message: `Talle "${data.talle}" no encontrado en el producto` });
+      }
+      if (product.talles[idx].cantidad < data.cantidad) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          message: `Stock insuficiente para talle "${data.talle}". Solo hay ${product.talles[idx].cantidad} unidad(es).`,
+        });
+      }
+      product.talles[idx].cantidad -= data.cantidad;
+    } else {
+      if (product.cantidad < data.cantidad) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          message: `Stock insuficiente. Solo hay ${product.cantidad} unidad(es).`,
+        });
+      }
     }
 
     const total = product.precio * data.cantidad;
 
-    product.cantidad -= data.cantidad;
     await product.save({ session });
 
     const sale = await Sale.create([{
@@ -43,6 +62,7 @@ export const createSale = async (req, res, next) => {
       total,
       empleado: data.empleado,
       metodoPago: data.metodoPago,
+      talle: data.talle || '',
     }], { session });
 
     await session.commitTransaction();
@@ -76,6 +96,12 @@ export const deleteSale = async (req, res, next) => {
 
     const product = await Product.findById(sale.producto).session(session);
     if (product) {
+      if (sale.talle) {
+        const idx = product.talles.findIndex((t) => t.talle === sale.talle);
+        if (idx !== -1) {
+          product.talles[idx].cantidad += sale.cantidad;
+        }
+      }
       product.cantidad += sale.cantidad;
       await product.save({ session });
     }

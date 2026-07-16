@@ -72,20 +72,36 @@ export const updateProduct = async (req, res, next) => {
 
 export const sellProduct = async (req, res, next) => {
   try {
-    const { cantidad } = sellProductSchema.parse(req.body);
+    const { cantidad, talle } = sellProductSchema.parse(req.body);
 
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    if (product.cantidad < cantidad) {
-      return res.status(400).json({
-        message: `Stock insuficiente. Solo hay ${product.cantidad} unidad(es) disponible(s).`,
-      });
+    if (product.talles?.length > 0 && !talle) {
+      return res.status(400).json({ message: 'Debe seleccionar un talle' });
     }
 
-    product.cantidad -= cantidad;
+    if (talle) {
+      const idx = product.talles.findIndex((t) => t.talle === talle);
+      if (idx === -1) {
+        return res.status(400).json({ message: `Talle "${talle}" no encontrado` });
+      }
+      if (product.talles[idx].cantidad < cantidad) {
+        return res.status(400).json({
+          message: `Stock insuficiente para talle "${talle}". Solo hay ${product.talles[idx].cantidad} unidad(es).`,
+        });
+      }
+      product.talles[idx].cantidad -= cantidad;
+    } else {
+      if (product.cantidad < cantidad) {
+        return res.status(400).json({
+          message: `Stock insuficiente. Solo hay ${product.cantidad} unidad(es) disponible(s).`,
+        });
+      }
+    }
+
     await product.save();
 
     res.json(product);
@@ -96,14 +112,26 @@ export const sellProduct = async (req, res, next) => {
 
 export const addStock = async (req, res, next) => {
   try {
-    const { cantidad } = addStockSchema.parse(req.body);
+    const { cantidad, talle } = addStockSchema.parse(req.body);
 
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    product.cantidad += cantidad;
+    if (product.talles?.length > 0 && !talle) {
+      return res.status(400).json({ message: 'Debe seleccionar un talle' });
+    }
+
+    if (talle) {
+      const idx = product.talles.findIndex((t) => t.talle === talle);
+      if (idx === -1) {
+        product.talles.push({ talle, cantidad });
+      } else {
+        product.talles[idx].cantidad += cantidad;
+      }
+    }
+
     await product.save();
 
     res.json(product);
@@ -130,15 +158,51 @@ export const exchangeProduct = async (req, res, next) => {
       return res.status(404).json({ message: 'Producto a cargar no encontrado' });
     }
 
-    if (productoCargado.cantidad < data.cantidadCargar) {
+    if (productoDevuelto.talles?.length > 0 && !data.talleDevolver) {
       await session.abortTransaction();
-      return res.status(400).json({
-        message: `Stock insuficiente de "${productoCargado.nombre}". Solo hay ${productoCargado.cantidad} unidad(es).`,
-      });
+      return res.status(400).json({ message: `Debe seleccionar un talle del producto "${productoDevuelto.nombre}" a devolver` });
+    }
+
+    if (productoCargado.talles?.length > 0 && !data.talleCargar) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: `Debe seleccionar un talle del producto "${productoCargado.nombre}" a cargar` });
+    }
+
+    if (data.talleCargar) {
+      const idx = productoCargado.talles.findIndex((t) => t.talle === data.talleCargar);
+      const disponible = idx !== -1 ? productoCargado.talles[idx].cantidad : 0;
+      if (disponible < data.cantidadCargar) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          message: `Stock insuficiente de "${productoCargado.nombre}" talle "${data.talleCargar}". Solo hay ${disponible} unidad(es).`,
+        });
+      }
+    }
+
+    if (data.talleDevolver) {
+      const idx = productoDevuelto.talles.findIndex((t) => t.talle === data.talleDevolver);
+      if (idx === -1) {
+        productoDevuelto.talles.push({ talle: data.talleDevolver, cantidad: 0 });
+      }
+    }
+    if (data.talleCargar) {
+      const idx = productoCargado.talles.findIndex((t) => t.talle === data.talleCargar);
+      if (idx === -1) {
+        productoCargado.talles.push({ talle: data.talleCargar, cantidad: 0 });
+      }
     }
 
     productoDevuelto.cantidad += data.cantidadDevolver;
     productoCargado.cantidad -= data.cantidadCargar;
+
+    if (data.talleDevolver) {
+      const idx = productoDevuelto.talles.findIndex((t) => t.talle === data.talleDevolver);
+      productoDevuelto.talles[idx].cantidad += data.cantidadDevolver;
+    }
+    if (data.talleCargar) {
+      const idx = productoCargado.talles.findIndex((t) => t.talle === data.talleCargar);
+      productoCargado.talles[idx].cantidad -= data.cantidadCargar;
+    }
 
     await productoDevuelto.save({ session });
     await productoCargado.save({ session });
@@ -146,6 +210,7 @@ export const exchangeProduct = async (req, res, next) => {
     await Return.create([{
       producto: data.productoDevolver,
       cantidad: data.cantidadDevolver,
+      talle: data.talleDevolver || '',
       motivo: data.motivo || `Cambio por ${productoCargado.nombre}`,
     }], { session });
 

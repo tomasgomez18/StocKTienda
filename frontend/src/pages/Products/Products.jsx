@@ -27,12 +27,14 @@ const Products = () => {
   const [error, setError] = useState('');
   const [returnModal, setReturnModal] = useState(null);
   const [returnCantidad, setReturnCantidad] = useState(1);
+  const [returnTalle, setReturnTalle] = useState('');
   const [returnMotivo, setReturnMotivo] = useState('');
   const [returnOtroMotivo, setReturnOtroMotivo] = useState('');
   const [exchangeActivo, setExchangeActivo] = useState(false);
   const [exchangeSearch, setExchangeSearch] = useState('');
   const [exchangeTarget, setExchangeTarget] = useState(null);
   const [exchangeCantidad, setExchangeCantidad] = useState(1);
+  const [exchangeTalle, setExchangeTalle] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
@@ -85,17 +87,23 @@ const Products = () => {
   };
 
   const [sellMetodoPago, setSellMetodoPago] = useState('efectivo');
+  const [sellTalle, setSellTalle] = useState('');
 
   const openSell = (product) => {
     setSellModal(product);
     setSellCantidad(1);
     setSellEmpleado('');
     setSellMetodoPago('efectivo');
+    setSellTalle('');
   };
 
   const confirmSell = async () => {
     if (!sellEmpleado.trim()) {
       Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe ingresar el nombre del empleado', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+      return;
+    }
+    if (sellModal.talles?.length > 0 && !sellTalle) {
+      Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe seleccionar un talle', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
       return;
     }
     try {
@@ -104,6 +112,7 @@ const Products = () => {
         cantidad: sellCantidad,
         empleado: sellEmpleado.trim(),
         metodoPago: sellMetodoPago,
+        talle: sellTalle,
       });
       setSellModal(null);
       fetchData();
@@ -115,15 +124,21 @@ const Products = () => {
 
   const [addStockModal, setAddStockModal] = useState(null);
   const [addStockCantidad, setAddStockCantidad] = useState(1);
+  const [addStockTalle, setAddStockTalle] = useState('');
 
   const openAddStock = (product) => {
     setAddStockModal(product);
     setAddStockCantidad(1);
+    setAddStockTalle('');
   };
 
   const confirmAddStock = async () => {
+    if (addStockModal.talles?.length > 0 && !addStockTalle) {
+      Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe seleccionar un talle', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+      return;
+    }
     try {
-      await addStock(addStockModal._id, { cantidad: addStockCantidad });
+      await addStock(addStockModal._id, { cantidad: addStockCantidad, talle: addStockTalle });
       setAddStockModal(null);
       fetchData();
       Swal.fire({ icon: 'success', title: 'Stock actualizado', timer: 1500, showConfirmButton: false, background: '#171717', color: '#fff' });
@@ -135,12 +150,14 @@ const Products = () => {
   const openReturn = (product) => {
     setReturnModal(product);
     setReturnCantidad(1);
+    setReturnTalle('');
     setReturnMotivo('');
     setReturnOtroMotivo('');
     setExchangeActivo(false);
     setExchangeSearch('');
     setExchangeTarget(null);
     setExchangeCantidad(1);
+    setExchangeTalle('');
   };
 
   const getReturnMotivo = () => returnMotivo === 'Otro' ? returnOtroMotivo.trim() : returnMotivo.trim();
@@ -151,19 +168,30 @@ const Products = () => {
       Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe ingresar un motivo', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
       return;
     }
+    if (returnModal.talles?.length > 0 && !returnTalle) {
+      Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe seleccionar el talle del producto a devolver', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+      return;
+    }
+    if (exchangeTarget?.talles?.length > 0 && !exchangeTalle) {
+      Swal.fire({ icon: 'warning', title: 'Campo requerido', text: 'Debe seleccionar el talle del producto nuevo', background: '#171717', color: '#fff', confirmButtonColor: '#fff', confirmButtonText: 'OK' });
+      return;
+    }
     try {
       if (exchangeTarget) {
         await exchangeProduct({
           productoDevolver: returnModal._id,
           cantidadDevolver: returnCantidad,
+          talleDevolver: returnTalle,
           productoCargar: exchangeTarget._id,
           cantidadCargar: exchangeCantidad,
+          talleCargar: exchangeTalle,
           motivo: motivoFinal,
         });
       } else {
         await createReturn({
           producto: returnModal._id,
           cantidad: returnCantidad,
+          talle: returnTalle,
           motivo: motivoFinal,
         });
       }
@@ -260,6 +288,22 @@ const Products = () => {
                   className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm"
                 />
               </div>
+              {sellModal.talles?.length > 0 && (
+                <div>
+                  <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Talle <span className="text-red-400">*</span></label>
+                  <select
+                    value={sellTalle}
+                    onChange={(e) => setSellTalle(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+                  >
+                    {sellModal.talles.map((t) => (
+                      <option key={t.talle} value={t.talle} className="bg-neutral-900">
+                        {t.talle} ({t.cantidad} disp.)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Metodo de pago</label>
                 <div className="flex gap-2">
@@ -305,6 +349,20 @@ const Products = () => {
             <p className="text-white/50 text-sm mb-4">
               <span className="text-white font-semibold">{addStockModal.nombre}</span> — Stock actual: {addStockModal.cantidad}
             </p>
+            {addStockModal.talles?.length > 0 && (
+              <div className="mb-4">
+                <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Talle <span className="text-red-400">*</span></label>
+                <select
+                  value={addStockTalle}
+                  onChange={(e) => setAddStockTalle(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+                >
+                  {addStockModal.talles.map((t) => (
+                    <option key={t.talle} value={t.talle} className="bg-neutral-900">{t.talle} ({t.cantidad})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">
               ¿Cuántas unidades entraron?
             </label>
@@ -356,6 +414,21 @@ const Products = () => {
                   className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-all text-sm"
                 />
               </div>
+
+              {returnModal.talles?.length > 0 && (
+                <div>
+                  <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Talle a devolver <span className="text-red-400">*</span></label>
+                  <select
+                    value={returnTalle}
+                    onChange={(e) => setReturnTalle(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-white/[0.07] border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30 transition-all text-sm"
+                  >
+                    {returnModal.talles.map((t) => (
+                      <option key={t.talle} value={t.talle} className="bg-neutral-900">{t.talle}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -413,6 +486,20 @@ const Products = () => {
                         <br />
                         <span className="font-semibold">Stock disponible:</span> {exchangeTarget.cantidad}
                       </p>
+                      {exchangeTarget.talles?.length > 0 && (
+                        <div className="mb-3">
+                          <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">Talle a cargar <span className="text-purple-400">*</span></label>
+                          <select
+                            value={exchangeTalle}
+                            onChange={(e) => setExchangeTalle(e.target.value)}
+                            className="w-full px-3 py-2.5 bg-white/[0.07] border border-purple-500/20 rounded-lg text-white focus:outline-none focus:border-purple-500/40 transition-all text-sm"
+                          >
+                            {exchangeTarget.talles.map((t) => (
+                              <option key={t.talle} value={t.talle} className="bg-neutral-900">{t.talle} ({t.cantidad})</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <label className="block text-xs text-white/40 font-medium uppercase tracking-wider mb-1.5">
                         Cantidad a cargar
                       </label>
@@ -479,9 +566,9 @@ const Products = () => {
             <thead className="bg-white/5">
               <tr>
                 <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Nombre</th>
-                <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Detalle</th>
                 <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Precio</th>
-                <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cantidad</th>
+                <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Talles</th>
+                <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Total</th>
                 <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Categoría</th>
                 <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Proveedor</th>
                 <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Acciones</th>
@@ -498,9 +585,24 @@ const Products = () => {
                 products.map((p) => (
                   <tr key={p._id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 py-3 font-medium text-white">{p.nombre}</td>
-                    <td className="px-4 py-3 text-white/50 max-w-xs truncate">{p.detalle || '—'}</td>
                     <td className="px-4 py-3 text-white/70">
                       {p.precio != null ? `$${Number(p.precio).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {p.talles?.length > 0 ? (
+                          p.talles.map((t) => {
+                            const cls = t.cantidad <= 0 ? 'bg-red-500/20 text-red-400' : t.cantidad <= 3 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400';
+                            return (
+                              <span key={t.talle} className={`inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>
+                                {t.talle}:{t.cantidad}
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-white/20 text-xs">—</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 ${(p.stockMinimo != null && p.cantidad <= p.stockMinimo) ? 'text-red-400 font-semibold' : 'text-white/60'}`}>

@@ -16,7 +16,25 @@ export const createReturn = async (req, res, next) => {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    product.cantidad += data.cantidad;
+    if (product.talles?.length > 0 && !data.talle) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'Debe seleccionar un talle' });
+    }
+
+    if (data.talle) {
+      const idx = product.talles.findIndex((t) => t.talle === data.talle);
+      if (idx === -1) {
+        product.talles.push({ talle: data.talle, cantidad: 0 });
+      }
+    }
+
+    await product.save({ session });
+
+    if (data.talle) {
+      const idx = product.talles.findIndex((t) => t.talle === data.talle);
+      product.talles[idx].cantidad += data.cantidad;
+    }
+
     await product.save({ session });
 
     let pendiente = data.cantidad;
@@ -63,8 +81,13 @@ export const deleteReturn = async (req, res, next) => {
 
     const product = await Product.findById(returnRecord.producto).session(session);
     if (product) {
-      product.cantidad -= returnRecord.cantidad;
-      if (product.cantidad < 0) product.cantidad = 0;
+      if (returnRecord.talle) {
+        const idx = product.talles.findIndex((t) => t.talle === returnRecord.talle);
+        if (idx !== -1) {
+          product.talles[idx].cantidad -= returnRecord.cantidad;
+          if (product.talles[idx].cantidad < 0) product.talles[idx].cantidad = 0;
+        }
+      }
       await product.save({ session });
     }
 

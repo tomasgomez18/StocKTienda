@@ -72,6 +72,7 @@ const Returns = () => {
               <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Producto</th>
               <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Categoría</th>
               <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cantidad</th>
+              <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Talle</th>
               <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Motivo</th>
               <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Fecha</th>
               <th className="text-right px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Acción</th>
@@ -80,7 +81,7 @@ const Returns = () => {
           <tbody>
             {returns.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-8 text-white/30">
+                <td colSpan={7} className="text-center py-8 text-white/30">
                   No hay devoluciones registradas
                 </td>
               </tr>
@@ -90,6 +91,7 @@ const Returns = () => {
                   <td className="px-4 py-3 font-medium text-white">{r.producto?.nombre}</td>
                   <td className="px-4 py-3 text-white/50">{r.producto?.categoria || '—'}</td>
                   <td className="px-4 py-3 text-white">{r.cantidad}</td>
+                  <td className="px-4 py-3 text-white/50">{r.talle || '—'}</td>
                   <td className="px-4 py-3 text-white/50">{r.motivo}</td>
                   <td className="px-4 py-3 text-white/30 text-xs">{formatDate(r.createdAt)}</td>
                   <td className="px-4 py-3 text-right">

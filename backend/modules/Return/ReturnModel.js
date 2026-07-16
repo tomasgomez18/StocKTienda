@@ -12,6 +12,11 @@ const returnSchema = new mongoose.Schema(
       required: true,
       min: 1,
     },
+    talle: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     motivo: {
       type: String,
       required: true,

@@ -495,6 +495,7 @@ const Sales = () => {
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Producto</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Categoria</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Cantidad</th>
+                  <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Talle</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Precio Unit.</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Total</th>
                   <th className="text-left px-4 py-3 text-white/40 font-medium uppercase tracking-wider text-[11px]">Empleado</th>
@@ -506,7 +507,7 @@ const Sales = () => {
               <tbody>
                 {data.sales.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-8 text-white/30">
+                    <td colSpan={10} className="text-center py-8 text-white/30">
                       No hay ventas en este periodo
                     </td>
                   </tr>
@@ -516,6 +517,7 @@ const Sales = () => {
                       <td className="px-4 py-3 font-medium text-white">{s.producto?.nombre}</td>
                       <td className="px-4 py-3 text-white/50">{s.producto?.categoria || '—'}</td>
                       <td className="px-4 py-3 text-white">{s.cantidad}</td>
+                      <td className="px-4 py-3 text-white/50">{s.talle || '—'}</td>
                       <td className="px-4 py-3 text-white/50">{formatMoney(s.precio)}</td>
                       <td className="px-4 py-3 text-white font-medium">{formatMoney(s.total)}</td>
                       <td className="px-4 py-3 text-white/50">{s.empleado}</td>

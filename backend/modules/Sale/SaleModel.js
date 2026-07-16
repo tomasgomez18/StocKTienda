@@ -32,6 +32,11 @@ const saleSchema = new mongoose.Schema(
       enum: ['efectivo', 'transferencia', 'tarjeta'],
       required: true,
     },
+    talle: {
+      type: String,
+      trim: true,
+      default: '',
+    },
   },
   { timestamps: true }
 );
